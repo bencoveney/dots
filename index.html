@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <title>SVG Dots</title>
+        <link rel="stylesheet" href="styles.css">
+    </head>
+
+    <body>
+        <div id="target"></div>
+        <script type="module">
+            import {create} from './svg-dots.js';
+            window.onload = () => {
+                create("#target");
+            };
+        </script>
+    </body>
+</html>
