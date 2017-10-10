@@ -1,7 +1,3 @@
-const numberOfDots = 100;
-const dotRadius = 3;
-const dotSpeed = 0.1;
-
 const getLineColor = opacity => `rgba(100,100,100,${opacity})`;
 
 const createLine = (context, x1, y1, x2, y2, opacity) => {
@@ -12,6 +8,8 @@ const createLine = (context, x1, y1, x2, y2, opacity) => {
     context.stroke();
 };
 
+const dotRadius = 3;
+
 const createDot = (context, dot) => {
     context.fillStyle = getLineColor(1);
     context.beginPath();
@@ -19,37 +17,35 @@ const createDot = (context, dot) => {
     context.fill();
 }
 
-const getDifference = (a, b) => Math.min(Math.abs(a - b), Math.abs(b - a));
+const numberOfDots = 100;
+const dotSpeed = 0.1;
+const getDotSpeed = () => (Math.random() * dotSpeed * 2) - dotSpeed;
 
 export const create = (selector) => {
     const canvas = document.querySelector(selector);
 
+    // Get dimensions and keep them up to date.
     let width;
     let height;
-
     const getDimensions = () => {
         width = target.clientWidth;
         height = target.clientHeight;
         canvas.setAttribute("width", width);
         canvas.setAttribute("height", height);
     }
-
     getDimensions();
     window.onresize = getDimensions;
 
-    const context = canvas.getContext("2d");
-
-    const dotFactory = () => ({
-        x: Math.random() * width,
-        y: Math.random() * height,
-        xSpeed: (Math.random() * dotSpeed * 2) - dotSpeed,
-        ySpeed: (Math.random() * dotSpeed * 2) - dotSpeed,
-        links: []
-    });
-
+    // Create dots.
     const dots = Array(numberOfDots)
         .fill(undefined)
-        .map(dotFactory)
+        .map(() => ({
+            x: Math.random() * width,
+            y: Math.random() * height,
+            xSpeed: getDotSpeed(),
+            ySpeed: getDotSpeed(),
+            links: []
+        }));
 
     // Create links between all elements.
     dots.forEach((current, index, all) => {
@@ -60,13 +56,14 @@ export const create = (selector) => {
                 weight: 0
             }))
             .forEach((link) => {
-                // Array.prototype.push(...) :(
                 link.dot1.links.push(link);
                 link.dot2.links.push(link);
             })
     });
 
-    const tick = (oldTime) => {
+    const context = canvas.getContext("2d");
+
+    const tick = (oldTime => {
         window.requestAnimationFrame(
             () => {
                 context.clearRect(0, 0, width, height);
@@ -89,21 +86,34 @@ export const create = (selector) => {
                 tick(newTime);
             }
         );
-    };
-
+    });
     tick(Date.now());
 };
 
+const updateCoordinate = (current, delta, max) => {
+    return (current + delta + max) % max;
+};
 const updateDots = (dots, width, height, deltaTime, context) => {
-    dots.forEach((dot) => {
-        const deltaX = dot.xSpeed * deltaTime;
-        dot.x = (dot.x + deltaX + width) % width;
-
-        const deltaY = dot.ySpeed * deltaTime;
-        dot.y = (dot.y + deltaY + height) % height;
-
+    dots.forEach(dot => {
+        dot.x = updateCoordinate(dot.x, dot.xSpeed * deltaTime, width);
+        dot.y = updateCoordinate(dot.y, dot.ySpeed * deltaTime, height);
         createDot(context, dot);
     });
+};
+
+const getDifference = (a, b) => Math.min(Math.abs(a - b), Math.abs(b - a));
+
+const getTorusDistance = (a, b, wrap) => {
+    const distance = Math.abs(a - b);
+    return distance > (wrap / 2) ? wrap - distance : distance;
+};
+
+const getDistance = (a, b, width, height) => {
+    const distanceX = getTorusDistance(a.x, b.x, width);
+    const distanceY = getTorusDistance(a.y, b.y, height);
+    return Math.sqrt(
+        Math.pow(distanceX, 2) + Math.pow(distanceY, 2)
+    );
 };
 
 const decay = 0.001;
@@ -113,18 +123,18 @@ const updateLinks = (dots, width, height, deltaTime, context) => {
     const closeLinks = dots.reduce(
         (previous, dot) => {
             const sorted = dot.links.sort((a, b) => {
-                const otherA = a.dot1 === dot ? a.dot2 : a.dot1;
-                const distanceAX = getTorusDistance(dot.x, otherA.x, width);
-                const distanceAY = getTorusDistance(dot.y, otherA.y, height);
-                const distanceA = Math.sqrt(
-                    Math.pow(distanceAX, 2) + Math.pow(distanceAY, 2)
-                )
-                const otherB = b.dot1 === dot ? b.dot2 : b.dot1;
-                const distanceBX = getTorusDistance(dot.x, otherB.x, width);
-                const distanceBY = getTorusDistance(dot.y, otherB.y, height);
-                const distanceB = Math.sqrt(
-                    Math.pow(distanceBX, 2) + Math.pow(distanceBY, 2)
-                )
+                const distanceA = getDistance(
+                    dot,
+                    a.dot1 === dot ? a.dot2 : a.dot1,
+                    width,
+                    height
+                );
+                const distanceB = getDistance(
+                    dot,
+                    b.dot1 === dot ? b.dot2 : b.dot1,
+                    width,
+                    height
+                );
                 return distanceA - distanceB;
             });
             return previous.concat(sorted.slice(0, linksPerDot));
@@ -182,8 +192,3 @@ const updateLinks = (dots, width, height, deltaTime, context) => {
             });
     });
 }
-
-const getTorusDistance = (a, b, wrap) => {
-    const distance = Math.abs(a - b);
-    return distance > (wrap / 2) ? wrap - distance : distance;
-};

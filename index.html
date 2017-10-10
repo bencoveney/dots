@@ -10,8 +10,7 @@
         <canvas id="target"></canvas>
         <script type="module">
             import {create} from './dots.js';
-            const setUp = () => create("#target");
-            window.onload = setUp;
+            window.onload = () => create("#target");
         </script>
     </body>
 </html>
