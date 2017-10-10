@@ -1,83 +1,51 @@
-const svgNamespace = "http://www.w3.org/2000/svg";
-const xmlNamespace = "http://www.w3.org/2000/xmlns/";
-
-const setAttributes = (element, attributes) => {
-    Object.entries(attributes).forEach(function([name, value]) {
-        element.setAttribute(name, value);
-    });
-};
-
-const createElement = (name, attributes) => {
-    const element = document.createElementNS(svgNamespace, name);
-    setAttributes(element, attributes);
-    return element;
-};
-
-const appendElement = (target, name, attributes) => {
-    const element = createElement(name, attributes);
-    target.appendChild(element);
-    return element;
-};
-
 const numberOfDots = 100;
 const dotRadius = 3;
 const dotSpeed = 0.1;
 
-const getLineColor = opacity => `rgba(100, 100, 100, ${opacity})`;
+const getLineColor = opacity => `rgba(100,100,100,${opacity})`;
 
-const createLine = (dotA, dotB) => createElement(
-    "line",
-    {
-        x1: Math.round(dotA.x),
-        y1: Math.round(dotA.y),
-        x2: Math.round(dotB.x),
-        y2: Math.round(dotB.y),
-        stroke: getLineColor(1),
-        "stroke-width": 1
-    }
-)
+const createLine = (context, x1, y1, x2, y2, opacity) => {
+    context.strokeStyle = getLineColor(opacity);
+    context.beginPath();
+    context.moveTo(x1, y1);
+    context.lineTo(x2, y2);
+    context.stroke();
+};
+
+const createDot = (context, dot) => {
+    context.fillStyle = getLineColor(1);
+    context.beginPath();
+    context.arc(dot.x, dot.y, dotRadius, 0, 2 * Math.PI, false);
+    context.fill();
+}
 
 const getDifference = (a, b) => Math.min(Math.abs(a - b), Math.abs(b - a));
 
 export const create = (selector) => {
-    const target = document.querySelector(selector);
+    const canvas = document.querySelector(selector);
 
-    const width = target.clientWidth;
-    const height = target.clientHeight;
+    let width;
+    let height;
 
-    const svg = appendElement(
-        target,
-        "svg",
-        {
-            version: "1.1",
-            viewBox: `0 0 ${width} ${height}`
-        }
-    );
+    const getDimensions = () => {
+        width = target.clientWidth;
+        height = target.clientHeight;
+        canvas.setAttribute("width", width);
+        canvas.setAttribute("height", height);
+    }
 
-    svg.setAttributeNS(xmlNamespace, "xmlns", svgNamespace);
+    getDimensions();
+    window.onresize = getDimensions;
 
-    const dotFactory = () => {
-        const x = Math.random() * width;
-        const y = Math.random() * height;
+    const context = canvas.getContext("2d");
 
-        return {
-            x,
-            y,
-            xSpeed: (Math.random() * dotSpeed * 2) - dotSpeed,
-            ySpeed: (Math.random() * dotSpeed * 2) - dotSpeed,
-            element: appendElement(
-                svg,
-                "circle",
-                {
-                    cx: Math.round(x),
-                    cy: Math.round(y),
-                    r: dotRadius,
-                    fill: getLineColor(1)
-                }
-            ),
-            links: []
-        };
-    };
+    const dotFactory = () => ({
+        x: Math.random() * width,
+        y: Math.random() * height,
+        xSpeed: (Math.random() * dotSpeed * 2) - dotSpeed,
+        ySpeed: (Math.random() * dotSpeed * 2) - dotSpeed,
+        links: []
+    });
 
     const dots = Array(numberOfDots)
         .fill(undefined)
@@ -89,9 +57,7 @@ export const create = (selector) => {
             .map((other) => ({
                 dot1: current,
                 dot2: other,
-                weight: 0,
-                element1: createLine(current, other),
-                element2: createLine(current, other)
+                weight: 0
             }))
             .forEach((link) => {
                 // Array.prototype.push(...) :(
@@ -103,20 +69,22 @@ export const create = (selector) => {
     const tick = (oldTime) => {
         window.requestAnimationFrame(
             () => {
+                context.clearRect(0, 0, width, height);
                 const newTime = Date.now();
                 const deltaTime = newTime - oldTime;
                 updateDots(
                     dots,
                     width,
                     height,
-                    deltaTime
+                    deltaTime,
+                    context
                 );
                 updateLinks(
                     dots,
                     width,
                     height,
                     deltaTime,
-                    svg
+                    context
                 );
                 tick(newTime);
             }
@@ -126,7 +94,7 @@ export const create = (selector) => {
     tick(Date.now());
 };
 
-const updateDots = (dots, width, height, deltaTime) => {
+const updateDots = (dots, width, height, deltaTime, context) => {
     dots.forEach((dot) => {
         const deltaX = dot.xSpeed * deltaTime;
         dot.x = (dot.x + deltaX + width) % width;
@@ -134,20 +102,14 @@ const updateDots = (dots, width, height, deltaTime) => {
         const deltaY = dot.ySpeed * deltaTime;
         dot.y = (dot.y + deltaY + height) % height;
 
-        setAttributes(
-            dot.element,
-            {
-                cx: Math.round(dot.x),
-                cy: Math.round(dot.y),
-            }
-        );
+        createDot(context, dot);
     });
 };
 
 const decay = 0.001;
 const linksPerDot = 2;
 
-const updateLinks = (dots, width, height, deltaTime, svg) => {
+const updateLinks = (dots, width, height, deltaTime, context) => {
     const closeLinks = dots.reduce(
         (previous, dot) => {
             const sorted = dot.links.sort((a, b) => {
@@ -170,18 +132,6 @@ const updateLinks = (dots, width, height, deltaTime, svg) => {
         []
     );
 
-    const remove = element => {
-        if (svg.contains(element)) {
-            svg.removeChild(element);
-        }
-    };
-
-    const append = element => {
-        if (!svg.contains(element)) {
-            svg.appendChild(element);
-        }
-    };
-
     const deltaDecay = decay * deltaTime;
     dots.forEach((dot) => {
         dot.links
@@ -198,49 +148,36 @@ const updateLinks = (dots, width, height, deltaTime, svg) => {
                     const spansHeight = getDifference(link.dot1.y, link.dot2.y) > (height / 2);
 
                     if (!spansWidth && !spansHeight) {
-                        remove(link.element2);
-                        setAttributes(
-                            link.element1,
-                            {
-                                x1: Math.round(link.dot1.x),
-                                y1: Math.round(link.dot1.y),
-                                x2: Math.round(link.dot2.x),
-                                y2: Math.round(link.dot2.y),
-                                stroke: getLineColor(link.weight)
-                            }
+                        createLine(
+                            context,
+                            link.dot1.x,
+                            link.dot1.y,
+                            link.dot2.x,
+                            link.dot2.y,
+                            link.weight
                         );
-                        append(link.element1);
                     } else {
                         const is1Left = link.dot1.x < link.dot2.x;
                         const is1Above = link.dot1.y < link.dot2.y;
                         const overlapX = spansWidth ? width : 0;
                         const overlapY = spansHeight ? height : 0;
-                        setAttributes(
-                            link.element1,
-                            {
-                                x1: Math.round(link.dot1.x),
-                                y1: Math.round(link.dot1.y),
-                                x2: Math.round(link.dot2.x + (is1Left ? -overlapX : overlapX)),
-                                y2: Math.round(link.dot2.y + (is1Above ? -overlapY : overlapY)),
-                                stroke: getLineColor(link.weight)
-                            }
+                        createLine(
+                            context,
+                            link.dot1.x,
+                            link.dot1.y,
+                            link.dot2.x + (is1Left ? -overlapX : overlapX),
+                            link.dot2.y + (is1Above ? -overlapY : overlapY),
+                            link.weight
                         );
-                        append(link.element1);
-                        setAttributes(
-                            link.element2,
-                            {
-                                x1: Math.round(link.dot1.x + (is1Left ? overlapX : -overlapX)),
-                                y1: Math.round(link.dot1.y + (is1Above ? overlapY : -overlapY)),
-                                x2: Math.round(link.dot2.x),
-                                y2: Math.round(link.dot2.y),
-                                stroke: getLineColor(link.weight)
-                            }
+                        createLine(
+                            context,
+                            link.dot1.x + (is1Left ? overlapX : -overlapX),
+                            link.dot1.y + (is1Above ? overlapY : -overlapY),
+                            link.dot2.x,
+                            link.dot2.y,
+                            link.weight
                         );
-                        append(link.element2);
                     }
-                } else {
-                    remove(link.element1);
-                    remove(link.element2);
                 }
             });
     });
