@@ -19,7 +19,7 @@ const appendElement = (target, name, attributes) => {
     return element;
 };
 
-const numberOfDots = 50;
+const numberOfDots = 100;
 const dotRadius = 3;
 const dotSpeed = 0.1;
 
@@ -145,7 +145,7 @@ const updateDots = (dots, width, height, deltaTime) => {
 };
 
 const decay = 0.001;
-const linksPerDot = 3;
+const linksPerDot = 2;
 
 const updateLinks = (dots, width, height, deltaTime, svg) => {
     const closeLinks = dots.reduce(
